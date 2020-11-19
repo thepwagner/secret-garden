@@ -6,36 +6,53 @@ import (
 	"strings"
 
 	"github.com/google/go-github/v32/github"
+	"github.com/sirupsen/logrus"
 )
 
-type Minter struct {
+type Minter interface {
+	Mint(ctx context.Context, repoFullNames []string, perms *github.InstallationPermissions) (string, error)
+}
+
+var _ Minter = (*TokensClient)(nil)
+
+type TokensClient struct {
 	gh             *github.Client
 	installationID int64
 }
 
-func NewMinter(gh *github.Client, installationID int64) *Minter {
-	return &Minter{gh: gh, installationID: installationID}
+func NewTokensClient(gh *github.Client, installationID int64) *TokensClient {
+	return &TokensClient{gh: gh, installationID: installationID}
 }
 
-func (m *Minter) Mint(ctx context.Context, repoFullNames []string, perms *github.InstallationPermissions) (string, error) {
-	repoIDs, err := m.resolveRepoIDs(ctx, repoFullNames)
+func (t *TokensClient) Mint(ctx context.Context, repoFullNames []string, perms *github.InstallationPermissions) (string, error) {
+	repoIDs, err := t.resolveRepoIDs(ctx, repoFullNames)
 	if err != nil {
 		return "", err
 	}
 
 	// Return token scoped to the target repositories and permissions:
-	token, _, err := m.gh.Apps.CreateInstallationToken(ctx, m.installationID, &github.InstallationTokenOptions{
+	token, _, err := t.gh.Apps.CreateInstallationToken(ctx, t.installationID, &github.InstallationTokenOptions{
 		RepositoryIDs: repoIDs,
 		Permissions:   perms,
 	})
 	if err != nil {
 		return "", err
 	}
+	logrus.WithFields(logrus.Fields{
+		"repo_ids":   repoIDs,
+		"expires_at": token.GetExpiresAt(),
+	}).Info("issued token")
+
+	token.GetExpiresAt()
 	return token.GetToken(), nil
 }
 
-func (m *Minter) resolveRepoIDs(ctx context.Context, repoFullNames []string) ([]int64, error) {
-	repos, err := m.listInstallationRepos(ctx)
+func (t *TokensClient) resolveRepoIDs(ctx context.Context, repoFullNames []string) ([]int64, error) {
+	if len(repoFullNames) == 0 {
+		return nil, nil
+	}
+
+	repos, err := t.listInstallationRepos(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -56,14 +73,10 @@ func (m *Minter) resolveRepoIDs(ctx context.Context, repoFullNames []string) ([]
 	return repoIDs, nil
 }
 
-func (m *Minter) listInstallationRepos(ctx context.Context) (map[string]int64, error) {
-	listToken, _, err := m.gh.Apps.CreateInstallationToken(ctx, m.installationID, &github.InstallationTokenOptions{})
+func (t *TokensClient) listInstallationRepos(ctx context.Context) (map[string]int64, error) {
+	listClient, err := t.newClient(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("generating token for repo list: %w", err)
-	}
-	listClient, err := newGitHubClient(listToken.GetToken())
-	if err != nil {
-		return nil, fmt.Errorf("creating client for repo list: %w", err)
+		return nil, fmt.Errorf("preparing client for list: %w", err)
 	}
 	// TODO: mo pages, _less_ problems
 	repos, _, err := listClient.Apps.ListRepos(ctx, &github.ListOptions{
@@ -78,4 +91,16 @@ func (m *Minter) listInstallationRepos(ctx context.Context) (map[string]int64, e
 		index[r.GetFullName()] = r.GetID()
 	}
 	return index, nil
+}
+
+func (t *TokensClient) newClient(ctx context.Context) (*github.Client, error) {
+	token, _, err := t.gh.Apps.CreateInstallationToken(ctx, t.installationID, &github.InstallationTokenOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("generating token: %w", err)
+	}
+	client, err := newGitHubClient(token.GetToken())
+	if err != nil {
+		return nil, fmt.Errorf("creating client: %w", err)
+	}
+	return client, nil
 }
