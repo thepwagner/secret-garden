@@ -13,7 +13,7 @@ import (
 func TestProcessConfig(t *testing.T) {
 	p := action.NewConfigProcessor("thepwagner-org", &mockMinter{}, &mockStorer{})
 
-	err := p.ProcessConfig(context.Background(), "../config")
+	err := p.ProcessConfig(context.Background(), "config")
 	require.NoError(t, err)
 }
 

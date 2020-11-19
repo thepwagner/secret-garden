@@ -19,7 +19,7 @@ func NewHandlers(env *Environment) *actions.Handlers {
 			org := repoSplit[0]
 
 			c := NewConfigProcessor(org, tc, tc)
-			return c.ProcessConfig(ctx, "config/")
+			return c.ProcessConfig(ctx, "config")
 		},
 	}
 }
