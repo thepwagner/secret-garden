@@ -2,49 +2,29 @@ package token
 
 import (
 	"context"
-	"crypto/rsa"
 	"fmt"
-	"time"
+	"strings"
 
-	"github.com/dgrijalva/jwt-go"
 	"github.com/google/go-github/v32/github"
-	"golang.org/x/oauth2"
 )
 
 type Minter struct {
-	// TODO: interface
-	gh *github.Client
+	gh             *github.Client
+	installationID int64
 }
 
-func NewAppClient(appID string, key *rsa.PrivateKey) (*github.Client, error) {
-	const jwtDuration = 5 * time.Minute
-	now := time.Now()
-	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, &jwt.StandardClaims{
-		IssuedAt:  now.Unix(),
-		ExpiresAt: now.Add(jwtDuration).Unix(),
-		Issuer:    appID,
-	})
-	signed, err := tok.SignedString(key)
+func NewMinter(gh *github.Client, installationID int64) *Minter {
+	return &Minter{gh: gh, installationID: installationID}
+}
+
+func (m *Minter) Mint(ctx context.Context, repoFullNames []string, perms *github.InstallationPermissions) (string, error) {
+	repoIDs, err := m.resolveRepoIDs(ctx, repoFullNames)
 	if err != nil {
-		return nil, fmt.Errorf("signing JWT: %w", err)
+		return "", err
 	}
 
-	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: signed})
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-	return github.NewClient(oauth2.NewClient(ctx, ts)), nil
-}
-
-func NewMinter(gh *github.Client) *Minter {
-	return &Minter{gh: gh}
-}
-
-func (m *Minter) Mint(ctx context.Context, repoIDs []int64, perms *github.InstallationPermissions) (string, error) {
-	// repoIDs
-	// - must not contain public repos
-	// - must be part of this installation
-	const installID = 123
-	token, _, err := m.gh.Apps.CreateInstallationToken(ctx, installID, &github.InstallationTokenOptions{
+	// Return token scoped to the target repositories and permissions:
+	token, _, err := m.gh.Apps.CreateInstallationToken(ctx, m.installationID, &github.InstallationTokenOptions{
 		RepositoryIDs: repoIDs,
 		Permissions:   perms,
 	})
@@ -52,4 +32,50 @@ func (m *Minter) Mint(ctx context.Context, repoIDs []int64, perms *github.Instal
 		return "", err
 	}
 	return token.GetToken(), nil
+}
+
+func (m *Minter) resolveRepoIDs(ctx context.Context, repoFullNames []string) ([]int64, error) {
+	repos, err := m.listInstallationRepos(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	repoIDs := make([]int64, 0, len(repoFullNames))
+	var missing []string
+	for _, fullName := range repoFullNames {
+		repoID, ok := repos[fullName]
+		if ok {
+			repoIDs = append(repoIDs, repoID)
+		} else {
+			missing = append(missing, fullName)
+		}
+	}
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("installation can not access repositories: %s", strings.Join(missing, ", "))
+	}
+	return repoIDs, nil
+}
+
+func (m *Minter) listInstallationRepos(ctx context.Context) (map[string]int64, error) {
+	listToken, _, err := m.gh.Apps.CreateInstallationToken(ctx, m.installationID, &github.InstallationTokenOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("generating token for repo list: %w", err)
+	}
+	listClient, err := newGitHubClient(listToken.GetToken())
+	if err != nil {
+		return nil, fmt.Errorf("creating client for repo list: %w", err)
+	}
+	// TODO: mo pages, _less_ problems
+	repos, _, err := listClient.Apps.ListRepos(ctx, &github.ListOptions{
+		PerPage: 100,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("listing installation repos: %w", err)
+	}
+
+	index := make(map[string]int64, len(repos))
+	for _, r := range repos {
+		index[r.GetFullName()] = r.GetID()
+	}
+	return index, nil
 }
