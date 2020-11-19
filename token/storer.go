@@ -11,38 +11,69 @@ import (
 
 type Storer interface {
 	StoreRepo(ctx context.Context, owner, repo, name, token string) error
-	// TODO: org
+	StoreOrg(ctx context.Context, owner, name, token string) error
 }
 
 var _ Storer = (*TokensClient)(nil)
 
 func (t *TokensClient) StoreRepo(ctx context.Context, owner, repo, name, token string) error {
-	repoClient, err := t.newClient(ctx)
+	gh, err := t.newClient(ctx)
 	if err != nil {
-		return fmt.Errorf("preparing client for list: %w", err)
+		return fmt.Errorf("preparing repo client: %w", err)
 	}
 
-	repoKey, _, err := repoClient.Actions.GetRepoPublicKey(ctx, owner, repo)
+	key, _, err := gh.Actions.GetRepoPublicKey(ctx, owner, repo)
 	if err != nil {
-		return fmt.Errorf("fetching repo public repoKey: %w", err)
+		return fmt.Errorf("fetching repo public key: %w", err)
 	}
 
-	key, err := base64.StdEncoding.DecodeString(repoKey.GetKey())
+	encrypted, err := newEncryptedSecret(key, name, token)
 	if err != nil {
-		return fmt.Errorf("decoding public repoKey: %v", err)
-	}
-	encrypted, exit := sodium.CryptoBoxSeal([]byte(token), key)
-	if exit != 0 {
-		return fmt.Errorf("encrypting secret failed")
+		return err
 	}
 
-	_, err = repoClient.Actions.CreateOrUpdateRepoSecret(ctx, owner, repo, &github.EncryptedSecret{
-		Name:           name,
-		KeyID:          repoKey.GetKeyID(),
-		EncryptedValue: base64.StdEncoding.EncodeToString(encrypted),
-	})
+	_, err = gh.Actions.CreateOrUpdateRepoSecret(ctx, owner, repo, encrypted)
 	if err != nil {
 		return fmt.Errorf("storing repo secret: %w", err)
 	}
 	return nil
+}
+
+func (t *TokensClient) StoreOrg(ctx context.Context, owner, name, token string) error {
+	gh, err := t.newClient(ctx)
+	if err != nil {
+		return fmt.Errorf("preparing org client: %w", err)
+	}
+
+	key, _, err := gh.Actions.GetOrgPublicKey(ctx, owner)
+	if err != nil {
+		return fmt.Errorf("fetching org public key: %w", err)
+	}
+
+	encrypted, err := newEncryptedSecret(key, name, token)
+	if err != nil {
+		return err
+	}
+
+	_, err = gh.Actions.CreateOrUpdateOrgSecret(ctx, owner, encrypted)
+	if err != nil {
+		return fmt.Errorf("storing org secret: %w", err)
+	}
+	return nil
+}
+
+func newEncryptedSecret(key *github.PublicKey, name, token string) (*github.EncryptedSecret, error) {
+	decoded, err := base64.StdEncoding.DecodeString(key.GetKey())
+	if err != nil {
+		return nil, fmt.Errorf("decoding public key: %v", err)
+	}
+	encrypted, exit := sodium.CryptoBoxSeal([]byte(token), decoded)
+	if exit != 0 {
+		return nil, fmt.Errorf("encrypting secret failed")
+	}
+	return &github.EncryptedSecret{
+		Name:           name,
+		KeyID:          key.GetKeyID(),
+		EncryptedValue: base64.StdEncoding.EncodeToString(encrypted),
+	}, nil
 }

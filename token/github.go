@@ -11,13 +11,13 @@ import (
 	"golang.org/x/oauth2"
 )
 
-func NewAppClient(appID string, key *rsa.PrivateKey) (*github.Client, error) {
+func NewAppClient(appID int64, key *rsa.PrivateKey) (*github.Client, error) {
 	const jwtDuration = 5 * time.Minute
 	now := time.Now()
 	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, &jwt.StandardClaims{
 		IssuedAt:  now.Unix(),
 		ExpiresAt: now.Add(jwtDuration).Unix(),
-		Issuer:    appID,
+		Issuer:    fmt.Sprintf("%d", appID),
 	})
 	signed, err := tok.SignedString(key)
 	if err != nil {

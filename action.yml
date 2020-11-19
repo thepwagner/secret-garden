@@ -1,0 +1,33 @@
+name: Secret Garden
+description: Maintain secrets
+author: 'thepwagner'
+inputs:
+  app_id:
+    description: app ID
+    required: true
+  app_private_key:
+    description: PEM encoded private key
+    required: true
+  installation_id:
+    description: installation ID for target
+    required: true
+  log_level:
+    description: 'Control debug/info/warn/error output'
+    required: false
+runs:
+  using: "composite"
+  steps:
+    - name: Verify Go SDK
+      run: which go || echo "Go required, please use actions/setup-go before me"
+      shell: bash
+    - name: Compile
+      run: cd "${{github.action_path}}" && go build -o "${{github.action_path}}/secret-garden" .
+      shell: bash
+    - name: Run
+      run: ${{github.action_path}}/secret-garden
+      shell: bash
+      env:
+        INPUT_APP_ID: ${{ inputs.app_id }}
+        INPUT_APP_PRIVATE_KEY: ${{ inputs.app_private_key }}
+        INPUT_INSTALLATION_ID: ${{ inputs.installation_id }}
+        INPUT_LOG_LEVEL: ${{ inputs.log_level }}
