@@ -11,7 +11,7 @@ import (
 
 type Storer interface {
 	StoreRepo(ctx context.Context, owner, repo, name, token string) error
-	StoreOrg(ctx context.Context, owner, name, token string) error
+	StoreOrg(ctx context.Context, owner, name, token string, consumers []string) error
 }
 
 var _ Storer = (*TokensClient)(nil)
@@ -39,7 +39,7 @@ func (t *TokensClient) StoreRepo(ctx context.Context, owner, repo, name, token s
 	return nil
 }
 
-func (t *TokensClient) StoreOrg(ctx context.Context, owner, name, token string) error {
+func (t *TokensClient) StoreOrg(ctx context.Context, owner, name, token string, consumers []string) error {
 	gh, err := t.newClient(ctx)
 	if err != nil {
 		return fmt.Errorf("preparing org client: %w", err)
@@ -53,6 +53,18 @@ func (t *TokensClient) StoreOrg(ctx context.Context, owner, name, token string) 
 	encrypted, err := newEncryptedSecret(key, name, token)
 	if err != nil {
 		return err
+	}
+
+	if len(consumers) == 0 {
+		encrypted.Visibility = "private"
+	} else {
+		encrypted.Visibility = "selected"
+
+		selectedRepoIDs, err := t.resolveRepoIDs(ctx, consumers)
+		if err != nil {
+			return fmt.Errorf("resolving consumer repos: %w", err)
+		}
+		encrypted.SelectedRepositoryIDs = selectedRepoIDs
 	}
 
 	_, err = gh.Actions.CreateOrUpdateOrgSecret(ctx, owner, encrypted)

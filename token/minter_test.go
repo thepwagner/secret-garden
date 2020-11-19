@@ -23,6 +23,7 @@ func TestMinter_Mint(t *testing.T) {
 	}
 	tok, err := tc.Mint(context.Background(), repos, &github.InstallationPermissions{
 		Contents: github.String("read"),
+
 	})
 	require.NoError(t, err)
 	t.Log(tok)
