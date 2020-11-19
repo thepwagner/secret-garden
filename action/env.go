@@ -13,12 +13,12 @@ type Environment struct {
 	actions.Environment
 
 	AppID            int64  `env:"INPUT_APP_ID"`
-	AppPrivateKeyPEM []byte `env:"INPUT_APP_PRIVATE_KEY"`
+	AppPrivateKeyPEM string `env:"INPUT_APP_PRIVATE_KEY"`
 	InstallationID   int64  `env:"INPUT_INSTALLATION_ID"`
 }
 
 func (e *Environment) NewTokensClient() (*token.TokensClient, error) {
-	pkBytes, _ := pem.Decode(e.AppPrivateKeyPEM)
+	pkBytes, _ := pem.Decode([]byte(e.AppPrivateKeyPEM))
 	if pkBytes == nil {
 		return nil, fmt.Errorf("invalid private key PEM")
 	}
