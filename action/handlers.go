@@ -19,6 +19,9 @@ func NewHandlers(env *Environment) *actions.Handlers {
 			token, err := gh.Mint(ctx, []string{"thepwagner-org/private"}, &github.InstallationPermissions{
 				Contents: github.String("read"),
 			})
+			if err != nil {
+				return err
+			}
 			return gh.StoreRepo(ctx, "thepwagner-org", "secret-garden", "TEST_TOKEN", token)
 		},
 	}

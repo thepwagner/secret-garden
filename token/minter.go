@@ -29,6 +29,7 @@ func (t *TokensClient) Mint(ctx context.Context, repoFullNames []string, perms *
 	if err != nil {
 		return "", err
 	}
+	logrus.WithField("repo_ids", repoIDs).Debug("resolved repo IDs")
 
 	// Return token scoped to the target repositories and permissions:
 	token, _, err := t.gh.Apps.CreateInstallationToken(ctx, t.installationID, &github.InstallationTokenOptions{
@@ -39,7 +40,7 @@ func (t *TokensClient) Mint(ctx context.Context, repoFullNames []string, perms *
 		return "", err
 	}
 	logrus.WithFields(logrus.Fields{
-		"repo_ids":   repoIDs,
+		"token":      len(token.GetToken()),
 		"expires_at": token.GetExpiresAt(),
 	}).Info("issued token")
 
