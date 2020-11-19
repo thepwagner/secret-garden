@@ -67,6 +67,7 @@ func (c *ConfigProcessor) processOrgSecrets(ctx context.Context, secrets map[str
 		if err := c.s.StoreOrg(ctx, c.org, secretName, tok, consumers); err != nil {
 			return err
 		}
+		log.Debug("processed org secret")
 	}
 	return nil
 }
@@ -75,7 +76,7 @@ func (c *ConfigProcessor) processRepoSecrets(ctx context.Context, repo string, s
 	for secretName, secretValue := range secrets {
 		secretCfg := secretValue.(map[string]interface{})
 		log := logrus.WithField("name", secretName)
-		log.Debug("processing org secret")
+		log.Debug("processing repo secret")
 
 		tok, err := c.mintToken(ctx, secretCfg)
 		if err != nil {
@@ -86,6 +87,7 @@ func (c *ConfigProcessor) processRepoSecrets(ctx context.Context, repo string, s
 		if err := c.s.StoreRepo(ctx, c.org, repo, secretName, tok); err != nil {
 			return err
 		}
+		log.Debug("processed repo secret")
 	}
 	return nil
 }

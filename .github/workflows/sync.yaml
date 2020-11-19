@@ -1,6 +1,7 @@
 name: Synchronize secrets
 on:
   workflow_dispatch:
+  push:
 
 jobs:
   sync:
