@@ -129,6 +129,8 @@ func secretPermissions(secretCfg map[string]interface{}) (*github.InstallationPe
 				perms.Contents = &s
 			case "issues":
 				perms.Issues = &s
+			case "metadata":
+				perms.Metadata = &s
 			default:
 				return nil, fmt.Errorf("unknown permission: %v", k)
 			}
