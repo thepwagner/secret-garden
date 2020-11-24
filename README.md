@@ -5,7 +5,7 @@ Hello, this is a tech demo of a solution to provide more control over GitHub tok
 It relies on an embedded GitHub App, and uses the [create_access_token](https://docs.github.com/en/free-pro-team@latest/rest/reference/apps#create-an-installation-access-token-for-an-app) API call to create GitHub API tokens. These tokens can have specific permissions, and include **multiple repositories** with the same owner.
 Tokens are stored as [GitHub Actions Secrets](https://docs.github.com/en/free-pro-team@latest/rest/reference/actions#secrets), so workflows can use them like [secrets.GITHUB_TOKEN](https://docs.github.com/en/free-pro-team@latest/actions/reference/authentication-in-a-workflow).
 
-Tokens are valid for 1 hour, so it's suggested this Action be invoked to refresh them every 15-30 minutes.
+Tokens are valid for 1 hour, so it's envisioned this Action be invoked to refresh them every 15-30 minutes.
 
 **WARNING:** Unlike the built-in `GITHUB_TOKEN`, events triggered by these tokens will trigger Actions themselves. This could cause an infinite loop, e.g. by pushing to a workflow triggered by `push`.
 
